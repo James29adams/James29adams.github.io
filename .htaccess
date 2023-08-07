@@ -1,10 +1,10 @@
+AuthUserFile ./login/.htpasswd
+AuthName "Zone protégée par mot de passe"
+AuthType Basic <limit GET POST> require valid-user
+</limit>
+
 User-agent: *
 Disallow: /cgi-bin/
 Disallow: /tmp/
 Disallow: /cache/
 Disallow: /administrator/
-
-AuthUserFile login/.htpasswd
-AuthName "Zone protégée par mot de passe"
-AuthType Basic <limit GET POST> require valid-user
-</limit>
