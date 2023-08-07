@@ -1,0 +1,13 @@
+ 
+<?php
+  if($_POST['op']=='envoyer'){
+     //code pour envoyer ton mail
+    echo '<script>alert("message envoyé");</script>';
+  }else
+  {
+?>
+<form method="POST" action="contact.php" name="FORMULAIRE">
+<!-- tes champs de formulaire-->
+<input type="hidden" name="op" value="envoyer">
+</form>
+<?php } ?>
