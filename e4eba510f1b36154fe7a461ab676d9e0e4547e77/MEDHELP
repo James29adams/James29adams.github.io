@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>App Dossiers Victimes</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    background: #f4f6f8;
+    color: #333;
+  }
+  header {
+    background: linear-gradient(135deg, #34495e, #2c3e50);
+    color: white;
+    padding: 15px;
+    text-align: center;
+    font-size: 1.4em;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+  #loginPage, #appPage {
+    display: none;
+    padding: 20px;
+  }
+  .container {
+    max-width: 400px;
+    margin: 50px auto;
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  input, textarea, select {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+  }
+  button {
+    padding: 10px 15px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  button:hover { background: #2980b9; }
+  #sidebar {
+    width: 250px;
+    background: #2c3e50;
+    color: white;
+    padding: 15px;
+    height: calc(100vh - 50px);
+    float: left;
+    overflow-y: auto;
+    display:none;
+  }
+  #sidebar h3 { text-align: center; margin-bottom: 15px; }
+  #sidebar button { width: 100%; margin-bottom: 10px; background: #1abc9c; }
+  #main { margin-left: 0; padding: 20px; transition: margin-left 0.3s; }
+  #main.withSidebar { margin-left: 260px; }
+  .dossier-item {
+    background: #34495e;
+    padding: 10px;
+    margin: 6px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .dossier-item:hover { background: #3d566e; }
+  .card {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+  }
+  .section-title {
+    margin-top: 15px;
+    font-weight: bold;
+    border-bottom: 2px solid #ddd;
+    padding-bottom: 5px;
+  }
+  .image-gallery img, .video-gallery video {
+    max-width: 120px;
+    margin: 5px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+  @media print {
+    body * { visibility: hidden; }
+    #printArea, #printArea * { visibility: visible; }
+    #printArea { position: absolute; left: 0; top: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>Application Dossiers Victimes</header>
+
+<div id="loginPage" class="container">
+  <h2>Connexion</h2>
+  <input type="text" id="loginUser" placeholder="Nom d'utilisateur">
+  <input type="password" id="loginPass" placeholder="Mot de passe">
+  <button onclick="login()">Se connecter</button>
+  <hr>
+  <h3>Créer un compte</h3>
+  <input type="text" id="registerUser" placeholder="Nom d'utilisateur">
+  <input type="password" id="registerPass" placeholder="Mot de passe">
+  <button onclick="register()">Créer le compte</button>
+</div>
+
+<div id="appPage">
+  <div id="sidebar">
+    <h3 id="currentUser"></h3>
+    <button onclick="showNewDossierForm()">+ Nouveau dossier</button>
+    <div id="dossierList"></div>
+    <hr>
+    <button onclick="logout()">Déconnexion</button>
+  </div>
+  <div id="main">
+    <h2>Bienvenue</h2>
+    <p>Bienvenue sur l’application des dossiers vétérinaires médico-légaux.</p>
+    <button onclick="openSidebar()">📂 Voir les dossiers</button>
+  </div>
+</div>
+
+<script>
+let users = JSON.parse(localStorage.getItem('users')) || {};
+let currentUser = null;
+let currentDossierIndex = null;
+let mediaRecorder;
+let recordedChunks = [];
+
+function saveUsers(){ localStorage.setItem('users', JSON.stringify(users)); }
+
+function showLogin(){
+  document.getElementById('loginPage').style.display = 'block';
+  document.getElementById('appPage').style.display = 'none';
+}
+function showApp(){
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('appPage').style.display = 'block';
+  document.getElementById('currentUser').innerText = 'Connecté : ' + currentUser;
+  document.getElementById('sidebar').style.display='none';
+  document.getElementById('main').classList.remove('withSidebar');
+  document.getElementById('main').innerHTML = `<h2>Bienvenue</h2><p>Bienvenue sur l’application des dossiers vétérinaires médico-légaux.</p><button onclick="openSidebar()">📂 Voir les dossiers</button>`;
+}
+function openSidebar(){
+  document.getElementById('sidebar').style.display='block';
+  document.getElementById('main').classList.add('withSidebar');
+  refreshSidebar();
+}
+
+function register(){
+  let u = document.getElementById('registerUser').value;
+  let p = document.getElementById('registerPass').value;
+  if(!u || !p) return alert('Remplir tous les champs');
+  if(users[u]) return alert('Utilisateur déjà existant');
+  users[u] = {pass: p, dossiers: []};
+  saveUsers();
+  alert('Compte créé, connectez-vous');
+}
+
+function login(){
+  let u = document.getElementById('loginUser').value;
+  let p = document.getElementById('loginPass').value;
+  if(!users[u]) return alert('Utilisateur inconnu');
+  if(users[u].pass !== p) return alert('Mot de passe incorrect');
+  currentUser = u;
+  showApp();
+}
+
+function logout(){ currentUser = null; showLogin(); }
+
+function refreshSidebar(){
+  const list = document.getElementById('dossierList');
+  list.innerHTML = '';
+  users[currentUser].dossiers.forEach((d, i)=>{
+    const div = document.createElement('div');
+    div.className = 'dossier-item';
+    div.innerText = d.nomVictime + ' (' + d.espece + ')';
+    div.onclick = ()=>showDossier(i);
+    list.appendChild(div);
+  });
+}
+
+function showNewDossierForm(){
+  document.getElementById('main').innerHTML = `
+    <div class="card">
+      <h2>Nouveau dossier</h2>
+      <label>Nom victime</label>
+      <input id="nomVictime" type="text">
+      <label>Espèce</label>
+      <input id="espece" type="text">
+      <label>Date</label>
+      <input id="date" type="date">
+      <label>Lieu</label>
+      <input id="lieu" type="text">
+      <label>Résumé</label>
+      <textarea id="resume"></textarea>
+      <button onclick="createDossier()">Créer</button>
+    </div>`;
+}
+
+function createDossier(){
+  const dossier = {
+    nomVictime: document.getElementById('nomVictime').value,
+    espece: document.getElementById('espece').value,
+    date: document.getElementById('date').value,
+    lieu: document.getElementById('lieu').value,
+    resume: document.getElementById('resume').value,
+    rapports: { toxicologie:{}, osteologie:{}, necropsie:{} },
+    images: [],
+    videos: []
+  };
+  users[currentUser].dossiers.push(dossier);
+  saveUsers();
+  refreshSidebar();
+  showDossier(users[currentUser].dossiers.length-1);
+}
+
+function showDossier(index){
+  currentDossierIndex = index;
+  const d = users[currentUser].dossiers[index];
+  let imagesHTML = d.images.map(src=>`<img src="${src}">`).join('');
+  let videosHTML = d.videos.map(src=>`<video src="${src}" controls></video>`).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div id="printArea">
+    <div class="card">
+      <h2>Dossier : ${d.nomVictime}</h2>
+      <p><b>Espèce :</b> ${d.espece}</p>
+      <p><b>Date :</b> ${d.date}</p>
+      <p><b>Lieu :</b> ${d.lieu}</p>
+      <p><b>Résumé :</b> ${d.resume}</p>
+    </div>
+
+    <div class="card">
+      <h3 class="section-title">Rapport Toxicologique</h3>
+      <label>Type d'échantillons</label>
+      <input id="toxiSamples" value="${d.rapports.toxicologie.samples||''}">
+      <label>Substances suspectes</label>
+      <input id="toxiSubstances" value="${d.rapports.toxicologie.substances||''}">
+      <label>Résultats</label>
+      <textarea id="toxiResult">${d.rapports.toxicologie.result||''}</textarea>
+      <button onclick="saveToxicologie()">Enregistrer Toxicologie</button>
+    </div>
+
+    <div class="card">
+      <h3 class="section-title">Rapport Ostéologique</h3>
+      <label>Fractures récentes</label>
+      <textarea id="osteoFracturesRecentes">${d.rapports.osteologie.fracturesRecentes||''}</textarea>
+      <label>Fractures anciennes</label>
+      <textarea id="osteoFracturesAnciennes">${d.rapports.osteologie.fracturesAnciennes||''}</textarea>
+      <label>Anomalies osseuses</label>
+      <textarea id="osteoAnomalies">${d.rapports.osteologie.anomalies||''}</textarea>
+      <button onclick="saveOsteologie()">Enregistrer Ostéologie</button>
+    </div>
+
+    <div class="card">
+      <h3 class="section-title">Rapport de Nécropsie</h3>
+      <label>Cavité thoracique</label>
+      <textarea id="necroThoracique">${d.rapports.necropsie.thoracique||''}</textarea>
+      <label>Cavité abdominale</label>
+      <textarea id="necroAbdominale">${d.rapports.necropsie.abdominale||''}</textarea>
+      <label>Cavité crânienne</label>
+      <textarea id="necroCranienne">${d.rapports.necropsie.cranienne||''}</textarea>
+      <label>Conclusion</label>
+      <textarea id="necroConclusion">${d.rapports.necropsie.conclusion||''}</textarea>
+      <button onclick="saveNecropsie()">Enregistrer Nécropsie</button>
+    </div>
+
+    <div class="card">
+      <h3 class="section-title">Images</h3>
+      <div class="image-gallery">${imagesHTML}</div>
+      <input type="file" accept="image/*" onchange="addImage(event)">
+    </div>
+
+    <div class="card">
+      <h3 class="section-title">Vidéos de nécropsie</h3>
+      <div class="video-gallery">${videosHTML}</div>
+      <button onclick="startVideoRecording()">🎥 Enregistrer une nécropsie</button>
+      <video id="preview" autoplay muted style="max-width:200px;display:none;"></video>
+      <button id="stopBtn" style="display:none;" onclick="stopVideoRecording()">⏹️ Stop</button>
+    </div>
+    </div>
+
+    <button onclick="window.print()">Imprimer ce dossier</button>
+    <button onclick="refreshSidebar()">← Retour à la liste</button>
+  `;
+}
+
+function saveToxicologie(){
+  let d = users[currentUser].dossiers[currentDossierIndex];
+  d.rapports.toxicologie = {
+    samples: document.getElementById('toxiSamples').value,
+    substances: document.getElementById('toxiSubstances').value,
+    result: document.getElementById('toxiResult').value
+  };
+  saveUsers();
+  alert('Rapport toxicologique enregistré');
+}
+function saveOsteologie(){
+  let d = users[currentUser].dossiers[currentDossierIndex];
+  d.rapports.osteologie = {
+    fracturesRecentes: document.getElementById('osteoFracturesRecentes').value,
+    fracturesAnciennes: document.getElementById('osteoFracturesAnciennes').value,
+    anomalies: document.getElementById('osteoAnomalies').value
+  };
+  saveUsers();
+  alert('Rapport ostéologique enregistré');
+}
+function saveNecropsie(){
+  let d = users[currentUser].dossiers[currentDossierIndex];
+  d.rapports.necropsie = {
+    thoracique: document.getElementById('necroThoracique').value,
+    abdominale: document.getElementById('necroAbdominale').value,
+    cranienne: document.getElementById('necroCranienne').value,
+    conclusion: document.getElementById('necroConclusion').value
+  };
+  saveUsers();
+  alert('Rapport nécropsie enregistré');
+}
+
+function addImage(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    users[currentUser].dossiers[currentDossierIndex].images.push(e.target.result);
+    saveUsers();
+    showDossier(currentDossierIndex);
+  }
+  reader.readAsDataURL(file);
+}
+
+async function startVideoRecording(){
+  const preview = document.getElementById('preview');
+  preview.style.display='block';
+  document.getElementById('stopBtn').style.display='inline-block';
+  const stream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+  preview.srcObject = stream;
+  recordedChunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, {type:'video/webm'});
+    const reader = new FileReader();
+    reader.onload = e => {
+      users[currentUser].dossiers[currentDossierIndex].videos.push(e.target.result);
+      saveUsers();
+      showDossier(currentDossierIndex);
+    }
+    reader.readAsDataURL(blob);
+  };
+  mediaRecorder.start();
+}
+
+function stopVideoRecording(){
+  document.getElementById('stopBtn').style.display='none';
+  document.getElementById('preview').style.display='none';
+  mediaRecorder.stop();
+  let tracks = document.getElementById('preview').srcObject.getTracks();
+  tracks.forEach(track => track.stop());
+}
+
+showLogin();
+</script>
+</body>
+</html>
